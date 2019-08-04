@@ -199,6 +199,7 @@ public:
         luakeys["up"] = false;
         luakeys["down"] = false;
         luakeys["jump"] = false;
+        luakeys["action"] = false;
 
         prev_time = clock::now();
 
@@ -369,8 +370,8 @@ public:
             set_key("right", SDL_SCANCODE_RIGHT);
             set_key("up", SDL_SCANCODE_UP);
             set_key("down", SDL_SCANCODE_DOWN);
-            set_key("jump", SDL_SCANCODE_SPACE);
-            set_key("reset", SDL_SCANCODE_R);
+            set_key("jump", SDL_SCANCODE_Z);
+            set_key("action", SDL_SCANCODE_X);
 
             constexpr auto rate = 60;
 
@@ -396,13 +397,17 @@ public:
         program_basic.set_normal_mat(glm::mat4(1));
         sushi::set_texture(0, sprite_tex);
 
+        auto cur_layer = int(lua["game_state"]["layer"]);
+
         entities.visit([&](ember_database::ent_id eid, const component::position& position, const component::sprite& sprite) {
-            const auto pos = glm::vec3(position.pos, 0);
-            auto modelmat = glm::translate(glm::mat4(1.f), pos);
-            auto offset = glm::translate(glm::mat3(1), glm::vec2{sprite.c / 16.f, sprite.r / 16.f});
-            program_basic.set_texcoord_mat(offset);
-            program_basic.set_MVP(proj * modelmat);
-            sushi::draw_mesh(sprite_mesh);
+            if (position.layer == cur_layer) {
+                const auto pos = glm::vec3(position.pos, 0);
+                auto modelmat = glm::translate(glm::mat4(1.f), pos);
+                auto offset = glm::translate(glm::mat3(1), glm::vec2{sprite.c / 16.f, sprite.r / 16.f});
+                program_basic.set_texcoord_mat(offset);
+                program_basic.set_MVP(proj * modelmat);
+                sushi::draw_mesh(sprite_mesh);
+            }
         });
 
         update_gui_state();

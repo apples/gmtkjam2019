@@ -21,6 +21,7 @@ return function(layer, x, y)
     local controller = component.controller.new()
     controller.data = {
         on_ground = false,
+        warp_target = 0,
     }
 
     local body = component.body.new()

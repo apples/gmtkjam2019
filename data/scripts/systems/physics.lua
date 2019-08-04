@@ -151,7 +151,6 @@ function physics.visit(dt)
     table.sort(bodies, function (a, b) return a.left < b.left end)
 
     local axis_list = {}
-    local collisions = {}
 
     for _,a in ipairs(bodies) do
         axis_list = linq(axis_list)

@@ -107,6 +107,13 @@ REGISTER(body,
          MEMBER(edge_bottom),
          MEMBER(edge_top))
 
+struct warp {
+    int to_layer = 1;
+};
+
+REGISTER(warp,
+         MEMBER(to_layer))
+
 } //namespace component
 
 #undef TAG

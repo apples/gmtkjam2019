@@ -26,17 +26,29 @@ function player.controller(eid, keys, dt)
 
     if not (keys.left or keys.right) then vel.x = vel.x * friction end
 
-    if keys.jump_pressed  then
+    if keys.jump_pressed and con.data.on_ground then
         vel.y = vel.y + jump_force
         con.data.on_ground = false
     end
+
+    if keys.action_pressed and con.data.warp_target ~= 0 then
+        game_state.layer = con.data.warp_target
+        pos.layer = con.data.warp_target
+    end
+
+    con.data.warp_target = 0
 end
 
 function player.on_collide(me, other, region)
     local con = engine.entities:get_component(me.eid, component.controller)
 
-    if region.bottom < me.bottom and me.bottom < region.top then
+    if other.body.solid and other.bottom < me.bottom and me.bottom < other.top then
         con.data.on_ground = true
+    end
+
+    if engine.entities:has_component(other.eid, component.warp) then
+        local warp = engine.entities:get_component(other.eid, component.warp)
+        con.data.warp_target = warp.to_layer
     end
 end
 

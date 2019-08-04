@@ -1,6 +1,7 @@
 local player = require('archetypes.player')
 local wall = require('archetypes.wall')
 local spike = require('archetypes.spike')
+local warp = require('archetypes.warp')
 
 local function add_stuff_at(layer, str, r, named, map)
     for i = 1, #str do
@@ -41,6 +42,12 @@ local function create_stage(layer)
     return next
 end
 
+local function tolayer(to)
+    return function(layer, x, y)
+        warp(layer, x, y, to)
+    end
+end
+
 function stages()
     create_stage(1)
         '                    '
@@ -49,16 +56,34 @@ function stages()
         '                    '
         '                    '
         '                    '
+        '      #             '
         '                    '
-        '                    '
-        '                    '
+        '     ###            '
         '         #          '
         '   @     ##         '
-        '         ## #       '
+        '       A ## #     B '
         '######### ##########'
         '                    '
         '                    '
-        {}
+        { A = tolayer(2), B = tolayer(2) }
+
+    create_stage(2)
+        '                    '
+        '                    '
+        '                    '
+        '                    '
+        '                    '
+        '                    '
+        '                    '
+        '                    '
+        '                    '
+        '      ####          '
+        '      #             '
+        '      #A          B '
+        '######### ##########'
+        '                    '
+        '                    '
+        { A = tolayer(1), B = tolayer(1) }
 
 end
 
