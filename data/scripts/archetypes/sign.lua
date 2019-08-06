@@ -1,6 +1,6 @@
 local engine = require('engine')
 
-return function(layer, x, y)
+return function(layer, x, y, i)
     local ent = engine.entities:create_entity()
 
     local position = component.position.new()
@@ -9,18 +9,11 @@ return function(layer, x, y)
     position.pos.y = y
 
     local sprite = component.sprite.new()
-    sprite.r = 0
-    sprite.c = 0
-
-    local body = component.body.new()
-    body.dynamic = false
-
-    local hurter = component.hurter.new()
+    sprite.r = 7
+    sprite.c = i
 
     engine.entities:add_component(ent, position)
     engine.entities:add_component(ent, sprite)
-    engine.entities:add_component(ent, body)
-    engine.entities:add_component(ent, hurter)
 
     return ent
 end

@@ -46,11 +46,13 @@ REGISTER(net_id,
 struct position {
     int layer = 0;
     glm::vec2 pos = {0, 0};
+    float z = 0;
 };
 
 REGISTER(position,
          MEMBER(layer),
-         MEMBER(pos))
+         MEMBER(pos),
+         MEMBER(z))
 
 struct velocity {
     glm::vec2 vel = {0, 0};
@@ -109,10 +111,35 @@ REGISTER(body,
 
 struct warp {
     int to_layer = 1;
+    bool single_use = false;
+    bool used = false;
 };
 
 REGISTER(warp,
-         MEMBER(to_layer))
+         MEMBER(to_layer),
+         MEMBER(single_use),
+         MEMBER(used))
+
+struct checkpoint {
+    int layer = 0;
+    float x = 0;
+    float y = 0;
+};
+
+REGISTER(checkpoint,
+         MEMBER(layer),
+         MEMBER(x),
+         MEMBER(y))
+
+struct checkpoint_flag {
+};
+
+REGISTER(checkpoint_flag)
+
+struct hurter {
+};
+
+REGISTER(hurter)
 
 } //namespace component
 

@@ -15,6 +15,9 @@ void register_all_components(sol::table& table) {
     register_type<controller>(table);
     register_type<body>(table);
     register_type<warp>(table);
+    register_type<checkpoint>(table);
+    register_type<checkpoint_flag>(table);
+    register_type<hurter>(table);
 }
 
 } //namespace component

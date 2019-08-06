@@ -380,6 +380,7 @@ public:
             run_system("gravity", 1.0 / rate);
             run_system("velocity", 1.0 / rate);
             run_system("physics", 1.0 / rate);
+            run_system("warp", 1.0 / rate);
 
             next_tick += std::chrono::duration_cast<clock::duration>(std::chrono::duration<std::int64_t, std::ratio<1, rate>>(1));
         }
@@ -387,7 +388,7 @@ public:
         glClearColor(0,0,0,1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        auto proj = glm::ortho(0.5f, 20.5f, 0.5f, 15.5f, 5.f, -5.f);
+        auto proj = glm::ortho(0.5f, 20.5f, 0.5f, 15.5f, -5.f, 5.f);
 
         program_basic.bind();
         program_basic.set_cam_forward({0.0, 0.0, -1.0});
@@ -401,7 +402,7 @@ public:
 
         entities.visit([&](ember_database::ent_id eid, const component::position& position, const component::sprite& sprite) {
             if (position.layer == cur_layer) {
-                const auto pos = glm::vec3(position.pos, 0);
+                const auto pos = glm::vec3(position.pos, position.z);
                 auto modelmat = glm::translate(glm::mat4(1.f), pos);
                 auto offset = glm::translate(glm::mat3(1), glm::vec2{sprite.c / 16.f, sprite.r / 16.f});
                 program_basic.set_texcoord_mat(offset);

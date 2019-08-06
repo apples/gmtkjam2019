@@ -1,6 +1,6 @@
 local engine = require('engine')
 
-return function(layer, x, y, to)
+return function(layer, x, y, to, single)
     local ent = engine.entities:create_entity()
 
     local position = component.position.new()
@@ -18,6 +18,8 @@ return function(layer, x, y, to)
 
     local warp = component.warp.new()
     warp.to_layer = to
+    warp.single_use = single
+    warp.used = false
 
     engine.entities:add_component(ent, position)
     engine.entities:add_component(ent, sprite)

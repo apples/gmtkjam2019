@@ -1,6 +1,5 @@
 local engine = require('engine')
 local visitor = require('visitor')
-local linq = require('linq')
 
 local G = -100
 

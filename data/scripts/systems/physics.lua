@@ -21,8 +21,13 @@ local function with_vel(eid, func)
 end
 
 local function resolve_collision(a, b, region)
-    call_script(a, b, region)
-    call_script(b, a, region)
+    local r1 = call_script(a, b, region)
+
+    if r1 == 'abort' then return 'abort' end
+
+    local r2 = call_script(b, a, region)
+
+    if r2 == 'abort' then return 'abort' end
 
     local w = region.right - region.left
     local h = region.top - region.bottom
@@ -171,7 +176,7 @@ function physics.visit(dt)
             local threshold = 1/32
 
             if mx > 0 and my > 0 and (mx > threshold or my > threshold) then
-                resolve_collision(a, b, region)
+                if resolve_collision(a, b, region) == 'abort' then return end
                 update_body(a)
                 update_body(b)
             end
