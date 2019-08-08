@@ -55,6 +55,16 @@ auto has_component(ember_database& db, ember_database::ent_id eid) -> bool {
     return db.has_component<T>(eid);
 }
 
+template <typename T>
+void visit(ember_database& db, const std::function<void(ember_database::ent_id, T&)>& visitor) {
+    db.visit(visitor);
+}
+
+template <typename T>
+void visit_tag(ember_database& db, const std::function<void(ember_database::ent_id, T)>& visitor) {
+    db.visit(visitor);
+}
+
 } //namespace _detail
 
 template <typename T>
@@ -63,9 +73,11 @@ void register_usertype(scripting::token<T>, sol::simple_usertype<T>& usertype) {
 
     if constexpr (is_tag<T>::value) {
         usertype.set("new", sol::constructors<T()>{});
+        usertype.set("_visit", &_detail::visit_tag<T>);
     } else {
         usertype.set("new", sol::constructors<T(), T(const T&)>{});
         usertype.set("_get_component", &_detail::get_component<T>);
+        usertype.set("_visit", &_detail::visit<T>);
     }
 
     usertype.set("_add_component", &_detail::add_component<T>);

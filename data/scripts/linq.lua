@@ -3,6 +3,7 @@ local linq = {}
 local where_iter = {}
 local select_iter = {}
 local concat_iter = {}
+local drop_iter = {}
 
 -- linq base
 
@@ -67,6 +68,10 @@ end
 
 function linq:concat(seq)
     return concat_iter(self, seq)
+end
+
+function linq:drop(count)
+    return drop_iter(self, count)
 end
 
 -- where iterator
@@ -161,6 +166,35 @@ function concat_iter:__call()
     if x ~= nil then
         return x
     end
+end
+
+-- drop iterator
+
+drop_iter.__index = drop_iter
+
+setmetatable(
+    drop_iter,
+    {
+        __index = linq,
+        __call = function (cls, ...)
+            return cls.new(...)
+        end
+    }
+)
+
+function drop_iter.new(source, count)
+    local self = setmetatable({}, drop_iter)
+    self.source = source
+    self.count = count
+    return self
+end
+
+function drop_iter:__call()
+    while self.count > 0 do
+        self.source()
+        self.count = self.count - 1
+    end
+    return self.source()
 end
 
 return linq
