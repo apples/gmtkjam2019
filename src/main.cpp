@@ -93,6 +93,9 @@ public:
             sushi_table.new_usertype<sushi::static_mesh>("static_mesh");
         }
 
+        lua["trace_push"] = [](const std::string& name){ tracing::push(name).discard(); };
+        lua["trace_pop"] = [](const std::string& name){ tracing::pop(name); };
+
         display_width = config["display"]["width"];
         display_height = config["display"]["height"];
         aspect_ratio = float(display_width) / float(display_height);
@@ -333,6 +336,9 @@ public:
     void tick() {
         if (!enable_tracing) {
             tracing::set_context(nullptr);
+
+            gui_state["debug_strings"] = lua.create_table();
+            gui_state["debug_vals"] = lua.create_table();
         } else {
             const auto& entries = tracing_context.get_entries();
 
@@ -348,6 +354,7 @@ public:
             });
 
             std::vector<std::string> debug_strings;
+            std::vector<std::string> debug_vals;
 
             auto total = [=]{
                 if (entries.count("TICK")) {
@@ -364,10 +371,12 @@ public:
 
                 auto dur = std::to_string(int(double(us) / double(total) * 100.0)) + "%";
 
-                debug_strings.push_back(entry.name + std::string(20 - entry.name.size(), ' ') + dur);
+                debug_strings.push_back(entry.name);
+                debug_vals.push_back(dur);
             }
 
             gui_state["debug_strings"] = debug_strings;
+            gui_state["debug_vals"] = debug_vals;
 
             tracing::set_context(&tracing_context);
         }

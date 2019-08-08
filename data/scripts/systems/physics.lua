@@ -134,8 +134,11 @@ end
 local physics = {}
 
 function physics.visit(dt)
+    trace_push('physics.visit')
+
     local bodies = {}
 
+    trace_push('physics.visit[gather bodies]')
     visitor.visit(
         {component.position, component.body},
         function (eid, position, body)
@@ -152,11 +155,15 @@ function physics.visit(dt)
             end
         end
     )
+    trace_pop('physics.visit[gather bodies]')
 
+    trace_push('physics.visit[sort bodies]')
     table.sort(bodies, function (a, b) return a.left < b.left end)
+    trace_pop('physics.visit[sort bodies]')
 
     local axis_list = {}
 
+    trace_push('physics.visit[sweep]')
     for _,a in ipairs(bodies) do
         axis_list = linq(axis_list)
             :where(function (b) return a.left < b.right end)
@@ -176,7 +183,9 @@ function physics.visit(dt)
             local threshold = 1/32
 
             if mx > 0 and my > 0 and (mx > threshold or my > threshold) then
-                if resolve_collision(a, b, region) == 'abort' then return end
+                trace_push('physics.visit[resolve_collision]')
+                if resolve_collision(a, b, region) == 'abort' then goto abort end
+                trace_pop('physics.visit[resolve_collision]')
                 update_body(a)
                 update_body(b)
             end
@@ -184,6 +193,14 @@ function physics.visit(dt)
 
         axis_list[#axis_list + 1] = a
     end
+    trace_pop('physics.visit[sweep]')
+    trace_pop('physics.visit')
+    do return end
+
+    ::abort::
+    trace_pop('physics.visit[resolve_collision]')
+    trace_pop('physics.visit[sweep]')
+    trace_pop('physics.visit')
 end
 
 return physics

@@ -9,6 +9,7 @@ config = {
 gui_state = {
     fps = 0,
     debug_strings = {},
+    debug_vals = {},
 }
 
 game_state = {
