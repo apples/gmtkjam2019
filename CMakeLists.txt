@@ -61,7 +61,6 @@ if(EMSCRIPTEN)
         " -s TOTAL_MEMORY=67108864"
         " -s DISABLE_EXCEPTION_CATCHING=0"
         " -s FORCE_FILESYSTEM=1"
-        " -s BINARYEN_TRAP_MODE=clamp"
         "${EMSCRIPTEN_PORTS_FLAGS}")
     string(CONCAT GAME_LINK_FLAGS_DEBUG
         " -g4"
