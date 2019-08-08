@@ -7,7 +7,8 @@ config = {
 }
 
 gui_state = {
-    fps = 0
+    fps = 0,
+    debug_strings = {},
 }
 
 game_state = {

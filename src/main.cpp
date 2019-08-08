@@ -13,6 +13,7 @@
 #include "utility.hpp"
 #include "resource_cache.hpp"
 #include "json_lua.hpp"
+#include "tracing.hpp"
 
 #include <sushi/sushi.hpp>
 #include <glm/gtx/intersect.hpp>
@@ -205,6 +206,8 @@ public:
 
         framerate_buffer.reserve(10);
 
+        std::cout << "initting game state" << std::endl;
+
         auto init_result = lua.safe_script_file("data/scripts/init.lua");
         if (!init_result.valid()) {
             sol::error err = init_result;
@@ -213,7 +216,9 @@ public:
 
         gui_state = lua["gui_state"];
 
-        auto init_gui_result = lua.do_file("data/scripts/init_gui.lua");
+        std::cout << "initting gui state" << std::endl;
+
+        auto init_gui_result = lua.safe_script_file("data/scripts/init_gui.lua");
 
         if (!init_gui_result.valid()) {
             sol::error err = init_gui_result;
@@ -221,6 +226,8 @@ public:
         }
 
         update_gui_state = lua["update_gui_state"];
+
+        std::cout << "initting static resources" << std::endl;
 
         sprite_tex = sushi::load_texture_2d("data/textures/sprites.png", false, false, false, false);
 
@@ -231,6 +238,8 @@ public:
             {{{{0,0,0},{1,1,1},{2,2,2}}},{{{2,2,2},{3,3,3},{0,0,0}}}});
         
         next_tick = std::chrono::duration_cast<clock::duration>(std::chrono::duration<std::int64_t, std::ratio<1, 30>>(1));
+
+        enable_tracing = false;
     }
 
     ~engine() {
@@ -257,6 +266,17 @@ public:
 
     auto handle_game_input(const SDL_Event& event) -> bool {
         switch (event.type) {
+            case SDL_KEYDOWN: {
+                switch (event.key.keysym.sym) {
+                    case SDLK_t:
+                        enable_tracing = !enable_tracing;
+                        return true;
+                    case SDLK_y:
+                        tracing_context.clear();
+                        return true;
+                }
+                break;
+            }
             case SDL_QUIT:
                 std::cout << "Goodbye!" << std::endl;
                 return true;
@@ -311,6 +331,49 @@ public:
     }
 
     void tick() {
+        if (!enable_tracing) {
+            tracing::set_context(nullptr);
+        } else {
+            const auto& entries = tracing_context.get_entries();
+
+            std::vector<tracing::entry> sorted_entries;
+            sorted_entries.reserve(entries.size());
+
+            for (auto& p : entries) {
+                sorted_entries.push_back(p.second);
+            }
+
+            std::sort(begin(sorted_entries), end(sorted_entries), [](auto& a, auto& b) {
+                return a.self_time > b.self_time;
+            });
+
+            std::vector<std::string> debug_strings;
+
+            auto total = [=]{
+                if (entries.count("TICK")) {
+                    return std::chrono::duration_cast<std::chrono::microseconds>(entries.at("TICK").total_time).count();
+                } else {
+                    return 1ll;
+                }
+            }();
+
+            for (int i = 0; i < 10 && i < sorted_entries.size(); ++i) {
+                const auto& entry = sorted_entries[i];
+
+                auto us = std::chrono::duration_cast<std::chrono::microseconds>(entry.self_time).count();
+
+                auto dur = std::to_string(int(double(us) / double(total) * 100.0)) + "%";
+
+                debug_strings.push_back(entry.name + std::string(20 - entry.name.size(), ' ') + dur);
+            }
+
+            gui_state["debug_strings"] = debug_strings;
+
+            tracing::set_context(&tracing_context);
+        }
+
+        auto tt = tracing::push("TICK");
+
         auto now = clock::now();
         auto delta_time = now - prev_time;
         prev_time = now;
@@ -347,7 +410,12 @@ public:
             if (!visit) {
                 throw std::runtime_error("System '" + module_name + "' does not have a 'visit' function");
             }
-            auto visit_result = visit(args...);
+
+            sol::protected_function_result visit_result;
+
+            TRACE("SYSTEM " + name) {
+                visit_result = visit(args...);
+            }
 
             if (!visit_result.valid()) {
                 sol::error err = visit_result;
@@ -385,40 +453,51 @@ public:
             next_tick += std::chrono::duration_cast<clock::duration>(std::chrono::duration<std::int64_t, std::ratio<1, rate>>(1));
         }
 
-        glClearColor(0,0,0,1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        TRACE("RENDER SCENE") {
+            glClearColor(0,0,0,1);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        auto proj = glm::ortho(0.5f, 20.5f, 0.5f, 15.5f, -5.f, 5.f);
+            auto proj = glm::ortho(0.5f, 20.5f, 0.5f, 15.5f, -5.f, 5.f);
 
-        program_basic.bind();
-        program_basic.set_cam_forward({0.0, 0.0, -1.0});
-        program_basic.set_tint({1, 1, 1, 1});
-        program_basic.set_hue(0);
-        program_basic.set_saturation(1);
-        program_basic.set_normal_mat(glm::mat4(1));
-        sushi::set_texture(0, sprite_tex);
+            program_basic.bind();
+            program_basic.set_cam_forward({0.0, 0.0, -1.0});
+            program_basic.set_tint({1, 1, 1, 1});
+            program_basic.set_hue(0);
+            program_basic.set_saturation(1);
+            program_basic.set_normal_mat(glm::mat4(1));
+            sushi::set_texture(0, sprite_tex);
 
-        auto cur_layer = int(lua["game_state"]["layer"]);
+            auto cur_layer = int(lua["game_state"]["layer"]);
 
-        entities.visit([&](ember_database::ent_id eid, const component::position& position, const component::sprite& sprite) {
-            if (position.layer == cur_layer) {
-                const auto pos = glm::vec3(position.pos, position.z);
-                auto modelmat = glm::translate(glm::mat4(1.f), pos);
-                auto offset = glm::translate(glm::mat3(1), glm::vec2{sprite.c / 16.f, sprite.r / 16.f});
-                program_basic.set_texcoord_mat(offset);
-                program_basic.set_MVP(proj * modelmat);
-                sushi::draw_mesh(sprite_mesh);
-            }
-        });
+            entities.visit([&](ember_database::ent_id eid, const component::position& position, const component::sprite& sprite) {
+                if (position.layer == cur_layer) {
+                    const auto pos = glm::vec3(position.pos, position.z);
+                    auto modelmat = glm::translate(glm::mat4(1.f), pos);
+                    auto offset = glm::translate(glm::mat3(1), glm::vec2{sprite.c / 16.f, sprite.r / 16.f});
+                    program_basic.set_texcoord_mat(offset);
+                    program_basic.set_MVP(proj * modelmat);
+                    sushi::draw_mesh(sprite_mesh);
+                }
+            });
+        }
 
-        update_gui_state();
-        gui::calculate_all_layouts(*root_widget);
+        TRACE("GUI UPDATE") {
+            update_gui_state();
+        }
 
-        renderer.begin();
-        gui::draw_all(*root_widget);
-        renderer.end();
+        TRACE("GUI LAYOUT") {
+            gui::calculate_all_layouts(*root_widget);
+        }
 
-        lua.collect_garbage();
+        TRACE("GUI RENDER") {
+            renderer.begin();
+            gui::draw_all(*root_widget);
+            renderer.end();
+        }
+
+        TRACE("LUA GC") {
+            lua.collect_garbage();
+        }
 
         SDL_GL_SwapWindow(g_window);
     }
@@ -453,6 +532,8 @@ private:
     sushi::static_mesh sprite_mesh;
     clock::duration next_tick;
     SoLoud::Soloud soloud;
+    tracing::context tracing_context;
+    bool enable_tracing;
 };
 
 std::function<void()> loop;

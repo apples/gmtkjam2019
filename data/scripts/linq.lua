@@ -119,13 +119,15 @@ function select_iter.new(source, mapper)
     local self = setmetatable({}, select_iter)
     self.source = source
     self.mapper = mapper
+    self.index = 0
     return self
 end
 
 function select_iter:__call()
+    self.index = self.index + 1
     local x = self.source()
     if x ~= nil then
-        return self.mapper(x)
+        return self.mapper(x, self.index)
     end
 end
 
