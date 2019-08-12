@@ -4,7 +4,6 @@ return function(layer, x, y)
     local ent = engine.entities:create_entity()
 
     local position = component.position.new()
-    position.layer = layer
     position.pos.x = x
     position.pos.y = y
 
@@ -31,6 +30,8 @@ return function(layer, x, y)
     engine.entities:add_component(ent, body)
     engine.entities:add_component(ent, script)
     engine.entities:add_component(ent, checkpoint)
+
+    engine.entities:add_to_layer(ent, layer)
 
     return ent
 end

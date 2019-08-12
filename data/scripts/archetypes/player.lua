@@ -4,7 +4,6 @@ return function(layer, x, y)
     local player = engine.entities:create_entity()
 
     local position = component.position.new()
-    position.layer = layer
     position.pos.x = x
     position.pos.y = y
     position.z = 1
@@ -39,6 +38,8 @@ return function(layer, x, y)
     engine.entities:add_component(player, controller)
     engine.entities:add_component(player, body)
     engine.entities:add_component(player, checkpoint)
+
+    engine.entities:add_to_layer(player, layer)
 
     return player
 end

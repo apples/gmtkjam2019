@@ -14,7 +14,6 @@ function player.on_hurt(eid, other)
 end
 
 function player.controller(eid, keys, dt)
-    local pos = engine.entities:get_component(eid, component.position)
     local vel = engine.entities:get_component(eid, component.velocity).vel
     local con = engine.entities:get_component(eid, component.controller)
 
@@ -35,7 +34,7 @@ function player.controller(eid, keys, dt)
 
     if keys.action_pressed and con.data.warp_target ~= 0 then
         game_state.layer = con.data.warp_target
-        pos.layer = con.data.warp_target
+        engine.entities:move_to_layer(eid, con.data.warp_target)
     end
 
     con.data.warp_target = 0
@@ -58,7 +57,7 @@ function player.on_collide(me, other, region)
     if engine.entities:has_component(other.eid, component.hurter) then
         local pos = engine.entities:get_component(me.eid, component.position)
         death()
-        game_state.layer = pos.layer
+        game_state.layer = engine.entities:get_layer_of(me.eid)
         return 'abort'
     end
 
@@ -76,7 +75,7 @@ function player.on_collide(me, other, region)
 
         spr.c = 1
 
-        check.layer = pos.layer
+        check.layer = engine.entities:get_layer_of(other.eid)
         check.x = pos.pos.x
         check.y = pos.pos.y
 

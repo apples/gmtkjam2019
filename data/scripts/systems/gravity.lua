@@ -7,9 +7,9 @@ local gravity = {}
 
 function gravity.visit(dt)
     visitor.visit(
-        {component.velocity, component.position, component.body},
-        function (eid, velocity, position, body)
-            if position.layer == game_state.layer then
+        {component.velocity, component.body},
+        function (eid, velocity, body)
+            if engine.entities:get_layer_of(eid) == game_state.layer then
                 velocity.vel.y = velocity.vel.y + G * dt
             end
         end

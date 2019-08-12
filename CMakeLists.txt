@@ -74,7 +74,10 @@ if(EMSCRIPTEN)
         LINK_FLAGS_DEBUG "${GAME_LINK_FLAGS_DEBUG}"
         RUNTIME_OUTPUT_DIRECTORY "${WWW_DIR}")
     target_compile_definitions(game PUBLIC SOL_CHECK_ARGUMENTS)
-    target_compile_options(game PRIVATE "-std=c++1z" "SHELL:${EMSCRIPTEN_PORTS_FLAGS}")
+    target_compile_options(game PRIVATE
+        "-std=c++1z"
+        "-mexception-handling"
+        "SHELL:${EMSCRIPTEN_PORTS_FLAGS}")
     em_link_js_library(game ${GAME_JS_SOURCES})
     target_link_libraries(game
         ginseng

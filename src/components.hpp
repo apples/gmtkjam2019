@@ -43,14 +43,19 @@ struct net_id {
 REGISTER(net_id,
          MEMBER(id))
 
-struct position {
+struct layers {
     int layer = 0;
+};
+
+REGISTER(layers,
+         MEMBER(layer))
+
+struct position {
     glm::vec2 pos = {0, 0};
     float z = 0;
 };
 
 REGISTER(position,
-         MEMBER(layer),
          MEMBER(pos),
          MEMBER(z))
 

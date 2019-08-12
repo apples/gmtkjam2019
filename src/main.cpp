@@ -478,8 +478,15 @@ public:
 
             auto cur_layer = int(lua["game_state"]["layer"]);
 
-            entities.visit([&](ember_database::ent_id eid, const component::position& position, const component::sprite& sprite) {
-                if (position.layer == cur_layer) {
+            const auto& layer_ents = entities.get_layer(cur_layer);
+
+            for (auto& eid : layer_ents) {
+                if (
+                    entities.has_component<component::position>(eid) &&
+                    entities.has_component<component::sprite>(eid)
+                ) {
+                    const auto& position = entities.get_component<component::position>(eid);
+                    const auto& sprite = entities.get_component<component::sprite>(eid);
                     const auto pos = glm::vec3(position.pos, position.z);
                     auto modelmat = glm::translate(glm::mat4(1.f), pos);
                     auto offset = glm::translate(glm::mat3(1), glm::vec2{sprite.c / 16.f, sprite.r / 16.f});
@@ -487,7 +494,7 @@ public:
                     program_basic.set_MVP(proj * modelmat);
                     sushi::draw_mesh(sprite_mesh);
                 }
-            });
+            }
         }
 
         TRACE("GUI UPDATE") {

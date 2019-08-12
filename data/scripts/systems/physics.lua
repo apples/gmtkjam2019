@@ -139,22 +139,24 @@ function physics.visit(dt)
     local bodies = {}
 
     trace_push('physics.visit[gather bodies]')
-    visitor.visit(
-        {component.position, component.body},
-        function (eid, position, body)
-            if position.layer == game_state.layer then
-                bodies[#bodies + 1] = {
-                    eid = eid,
-                    position = position,
-                    body = body,
-                    left = position.pos.x - body.width / 2,
-                    right = position.pos.x + body.width / 2,
-                    bottom = position.pos.y - body.height / 2,
-                    top = position.pos.y + body.height / 2,
-                }
-            end
+    for _,eid in ipairs(engine.entities:get_layer(game_state.layer)) do
+        if (
+            engine.entities:has_component(eid, component.position) and
+            engine.entities:has_component(eid, component.body)
+        ) then
+            local position = engine.entities:get_component(eid, component.position)
+            local body = engine.entities:get_component(eid, component.body)
+            bodies[#bodies + 1] = {
+                eid = eid,
+                position = position,
+                body = body,
+                left = position.pos.x - body.width / 2,
+                right = position.pos.x + body.width / 2,
+                bottom = position.pos.y - body.height / 2,
+                top = position.pos.y + body.height / 2,
+            }
         end
-    )
+    end
     trace_pop('physics.visit[gather bodies]')
 
     trace_push('physics.visit[sort bodies]')

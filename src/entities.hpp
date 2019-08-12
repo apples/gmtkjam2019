@@ -44,10 +44,17 @@ public:
         return entity_serializer<Coms...>::serialize(*this, eid);
     }
 
+    void add_to_layer(ent_id eid, int layer);
+    void remove_from_layer(ent_id eid, int layer);
+    void move_to_layer(ent_id eid, int layer);
+    const std::vector<ent_id>& get_layer(int layer);
+    int get_layer_of(ent_id eid);
+
 private:
     net_id next_id = 1;
     std::unordered_map<net_id, ent_id> netid_to_entid;
     std::function<void(net_id id)> destroy_entity_callback;
+    std::unordered_map<int, std::vector<ent_id>> layers;
 };
 
 namespace scripting {

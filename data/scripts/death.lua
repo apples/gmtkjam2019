@@ -5,7 +5,7 @@ return function()
     visitor.visit(
         {component.checkpoint, component.position},
         function (eid, checkpoint, position)
-            position.layer = checkpoint.layer
+            engine.entities:move_to_layer(eid, checkpoint.layer)
             position.pos.x = checkpoint.x
             position.pos.y = checkpoint.y
 
