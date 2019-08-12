@@ -1,5 +1,6 @@
 local vdom = require('vdom')
 local linq = require('linq')
+local debug_table = require('gui.debug_table')
 
 local debug_display = vdom.component()
 
@@ -16,37 +17,8 @@ function debug_display:render()
             halign='left',
             valign='top',
         },
-        linq(self.props.strings)
-            :select(function (s, i)
-                return vdom.create_element(
-                    'label',
-                    {
-                        halign='left',
-                        valign='top',
-                        height = 12,
-                        color = '#fff',
-                        text = s,
-                        top = 12 * i,
-                    }
-                )
-            end)
-            :tolist(),
-        linq(self.props.vals)
-            :select(function (s, i)
-                return vdom.create_element(
-                    'label',
-                    {
-                        halign='left',
-                        valign='top',
-                        height = 12,
-                        color = '#fff',
-                        text = s,
-                        top = 12 * i,
-                        right = 250,
-                    }
-                )
-            end)
-            :tolist()
+        vdom.create_element(debug_table, { strings = self.props.strings, top = 12, left = 0 }),
+        vdom.create_element(debug_table, { strings = self.props.vals, top = 12, right = 250 })
     )
 end
 

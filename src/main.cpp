@@ -211,9 +211,10 @@ public:
 
         std::cout << "initting game state" << std::endl;
 
-        auto init_result = lua.safe_script_file("data/scripts/init.lua");
+        auto init_result = lua.do_file("data/scripts/init.lua");
         if (!init_result.valid()) {
             sol::error err = init_result;
+            std::cerr << err.what() << std::endl;
             throw std::runtime_error("Init error: "s + err.what());
         }
 
@@ -221,10 +222,10 @@ public:
 
         std::cout << "initting gui state" << std::endl;
 
-        auto init_gui_result = lua.safe_script_file("data/scripts/init_gui.lua");
-
+        auto init_gui_result = lua.do_file("data/scripts/init_gui.lua");
         if (!init_gui_result.valid()) {
             sol::error err = init_gui_result;
+            std::cerr << err.what() << std::endl;
             throw std::runtime_error("init_gui(): "s + err.what());
         }
 
@@ -356,20 +357,21 @@ public:
             std::vector<std::string> debug_strings;
             std::vector<std::string> debug_vals;
 
-            auto total = [=]{
-                if (entries.count("TICK")) {
-                    return std::chrono::duration_cast<std::chrono::microseconds>(entries.at("TICK").total_time).count();
-                } else {
-                    return 1ll;
-                }
-            }();
+            auto total = 1ll;
+            auto count = 1ll;
 
-            for (int i = 0; i < 10 && i < sorted_entries.size(); ++i) {
+            if (entries.count("TICK")) {
+                auto& tickentry = entries.at("TICK");
+                total = std::chrono::duration_cast<std::chrono::microseconds>(tickentry.total_time).count();
+                count = tickentry.calls;
+            }
+
+            for (int i = 0; i < 20 && i < sorted_entries.size(); ++i) {
                 const auto& entry = sorted_entries[i];
 
                 auto us = std::chrono::duration_cast<std::chrono::microseconds>(entry.self_time).count();
 
-                auto dur = std::to_string(int(double(us) / double(total) * 100.0)) + "%";
+                auto dur = std::to_string(us / count) + "us";
 
                 debug_strings.push_back(entry.name);
                 debug_vals.push_back(dur);
@@ -498,7 +500,12 @@ public:
         }
 
         TRACE("GUI UPDATE") {
-            update_gui_state();
+            auto result = update_gui_state();
+            if (!result.valid()) {
+                sol::error err = result;
+                std::cerr << err.what() << std::endl;
+                throw std::runtime_error("Init error: "s + err.what());
+            }
         }
 
         TRACE("GUI LAYOUT") {
@@ -542,7 +549,7 @@ private:
     clock::time_point prev_time;
     std::vector<std::chrono::nanoseconds> framerate_buffer;
     sol::table gui_state;
-    sol::function update_gui_state;
+    sol::protected_function update_gui_state;
     sol::table luakeys;
     sushi::texture_2d sprite_tex;
     sushi::static_mesh sprite_mesh;

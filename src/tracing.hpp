@@ -34,6 +34,7 @@ struct entry {
     std::string name;
     duration self_time = duration(0);
     duration total_time = duration(0);
+    int calls = 0;
 };
 
 struct stack_frame {

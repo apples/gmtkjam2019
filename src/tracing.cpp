@@ -57,6 +57,7 @@ void context::pop(const std::string& name) {
 
     entry.total_time += time;
     entry.self_time += time - frame.child_time;
+    ++entry.calls;
 
     stack.pop_back();
 

@@ -16,17 +16,21 @@ end
 
 local function update_widget_properties(widget, prev_props, next_props)
     for k,v in pairs(prev_props) do
-        if is_event_name(k) then
-            widget[k] = nil
-        else
-            widget:set_attribute(k, nil)
+        if next_props[k] == nil then
+            if is_event_name(k) then
+                widget[k] = nil
+            else
+                widget:set_attribute(k, nil)
+            end
         end
     end
     for k,v in pairs(next_props) do
-        if is_event_name(k) then
-            widget[k] = v
-        else
-            widget:set_attribute(k, type(v) == 'string' and v or tostring(v))
+        if prev_props[k] ~= v then
+            if is_event_name(k) then
+                widget[k] = v
+            else
+                widget:set_attribute(k, type(v) == 'string' and v or tostring(v))
+            end
         end
     end
 end
@@ -52,40 +56,35 @@ local function is_component_instance(com)
         is_component_type(getmetatable(com))
 end
 
-local function create_element(element_type, config, ...)
-    assert(type(element_type) == 'string' or is_component_type(element_type))
-    assert(type(config) == 'nil' or type(config) == 'table')
+local create_element
+
+local function flatten_children(out, ...)
+    if select('#', ...) == 0 then 
+        return
+    end
+
+    local head = ...
+
+    if is_vdom_element(head) then
+        out[#out + 1] = head
+    elseif type(head) == 'table' then
+        flatten_children(out, table.unpack(head))
+    elseif head ~= nil and head ~= false then
+        out[#out + 1] = create_element('_TEXT_ELEMENT_', { node_value = tostring(head) })
+    end
+
+    return flatten_children(out, select(2, ...))
+end
+
+create_element = function (element_type, config, ...)
+    --assert(type(element_type) == 'string' or is_component_type(element_type))
+    --assert(type(config) == 'nil' or type(config) == 'table')
 
     local props = assign({}, config or {})
 
-    local children = linq({...}, select('#', ...))
-        -- Flatten children
-        :reduce(
-            linq({}),
-            function (acc, child)
-                if type(child) == 'table' and #child > 0 then
-                    -- Flatten children that are arrays
-                    return acc:concat(linq(child))
-                elseif is_vdom_element(child) or type(child) == 'string' then
-                    -- Leave single children alone
-                    return acc:concat(linq({child}))
-                else
-                    -- Ignore nil/false
-                    return acc
-                end
-            end)
-        -- Convert text to elements
-        :select(
-            function (child)
-                return type(child) == 'table' and
-                    child or
-                    create_element('_TEXT_ELEMENT_', { node_value = child })
-            end)
-        :tolist()
+    local children = {}
 
-    for _,child in ipairs(children) do
-        assert(is_vdom_element(child))
-    end
+    flatten_children(children, ...)
 
     return {
         type = element_type,
@@ -95,8 +94,8 @@ local function create_element(element_type, config, ...)
 end
 
 local function create_component_instance(element, instance)
-    assert(is_vdom_element(element))
-    assert(type(instance) == 'table')
+    --assert(is_vdom_element(element))
+    --assert(type(instance) == 'table')
 
     local element_type = element.type
     local props = element.props
@@ -109,7 +108,7 @@ local function create_component_instance(element, instance)
 end
 
 local function instantiate(element, parent_widget)
-    assert(is_vdom_element(element))
+    --assert(is_vdom_element(element))
 
     local element_type = element.type
     local props = element.props
@@ -178,8 +177,8 @@ end
 local reconcile -- forward
 
 local function reconcile_children(instance, element)
-    assert(is_widget_instance(instance))
-    assert(is_vdom_element(element))
+    --assert(is_widget_instance(instance))
+    --assert(is_vdom_element(element))
 
     local widget = instance.widget
     local child_instances = instance.child_instances
@@ -215,9 +214,9 @@ local function cleanup(instance)
 end
 
 reconcile = function (parent_widget, instance, element)
-    assert(parent_widget ~= nil)
-    assert(instance == nil or is_instance(instance))
-    assert(element == nil or is_vdom_element(element))
+    --assert(parent_widget ~= nil)
+    --assert(instance == nil or is_instance(instance))
+    --assert(element == nil or is_vdom_element(element))
 
     if instance == nil then
         -- Create instance
@@ -270,7 +269,7 @@ reconcile = function (parent_widget, instance, element)
 end
 
 local function render(element, container)
-    assert(is_vdom_element(element))
+    --assert(is_vdom_element(element))
 
     return reconcile(container, nil, element)
 end
@@ -281,7 +280,8 @@ function component_base:constructor(props)
 end
 
 function component_base:set_state(partial_state)
-    assert(type(partial_state) == 'table')
+    trace_push('vdom.lua: component_base.set_state')
+    --assert(type(partial_state) == 'table')
 
     local new_state = {}
     assign(new_state, self.state)
@@ -294,6 +294,7 @@ function component_base:set_state(partial_state)
     local element = internal_instance.element
 
     reconcile(parent_widget, internal_instance, element)
+    trace_pop('vdom.lua: component_base.set_state')
 end
 
 local function component()
