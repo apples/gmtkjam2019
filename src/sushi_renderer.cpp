@@ -50,7 +50,7 @@ float sushi_renderer::get_text_width(const std::string& text, const std::string&
     auto width = 0.f;
 
     for (auto c : text) {
-        auto& glyph = font->get_glyph(c);
+        auto glyph = font->get_glyph(c);
         width += glyph.advance;
     }
 
@@ -66,16 +66,24 @@ void sushi_renderer::draw_text(const std::string& text, const std::string& fontn
     program_msdf->set_msdf(0);
     program_msdf->set_pxRange(4.f);
     program_msdf->set_fgColor(color);
+    program_msdf->set_texScale(msdf_font::TEX_SIZE);
+
+    const sushi::texture_2d* last_tex = nullptr;
 
     for (auto c : text) {
-        auto& glyph = font->get_glyph(c);
+        auto glyph = [&]{ return font->get_glyph(c); }();
 
-        program_msdf->set_MVP(proj * model);
-        program_msdf->set_texSize({glyph.texture.width, glyph.texture.height});
+        if (glyph.mesh) {
+            program_msdf->set_MVP(proj * model);
+            program_msdf->set_texSize({glyph.width, glyph.height});
 
-        sushi::set_texture(0, glyph.texture);
-        sushi::draw_mesh(glyph.mesh);
+            if (glyph.texture != last_tex) {
+                last_tex = glyph.texture;
+                sushi::set_texture(0, *glyph.texture);
+            }
+            sushi::draw_mesh(*glyph.mesh);
 
-        model = glm::translate(model, glm::vec3{glyph.advance, 0.f, 0.f});
+            model = glm::translate(model, glm::vec3{glyph.advance, 0.f, 0.f});
+        }
     }
 }

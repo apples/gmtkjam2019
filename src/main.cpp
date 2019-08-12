@@ -364,9 +364,14 @@ public:
                 auto& tickentry = entries.at("TICK");
                 total = std::chrono::duration_cast<std::chrono::microseconds>(tickentry.total_time).count();
                 count = tickentry.calls;
+
+                auto dur = std::to_string(total / count) + "us";
+
+                debug_strings.push_back("TICK");
+                debug_vals.push_back(dur);
             }
 
-            for (int i = 0; i < 20 && i < sorted_entries.size(); ++i) {
+            for (int i = 0; i < 10 && i < sorted_entries.size(); ++i) {
                 const auto& entry = sorted_entries[i];
 
                 auto us = std::chrono::duration_cast<std::chrono::microseconds>(entry.self_time).count();

@@ -62,6 +62,7 @@ msdf_shader_program::msdf_shader_program(const std::string& vertfile, const std:
     uniforms.msdf = get_uniform_location("msdf");
     uniforms.pxRange = get_uniform_location("pxRange");
     uniforms.texSize = get_uniform_location("texSize");
+    uniforms.texScale = get_uniform_location("texScale");
     uniforms.fgColor = get_uniform_location("fgColor");
 }
 
@@ -83,6 +84,10 @@ void msdf_shader_program::set_pxRange(float f) {
 
 void msdf_shader_program::set_texSize(const glm::vec2& vec) {
     sushi::set_current_program_uniform(uniforms.texSize, vec);
+}
+
+void msdf_shader_program::set_texScale(float val) {
+    sushi::set_current_program_uniform(uniforms.texScale, val);
 }
 
 void msdf_shader_program::set_fgColor(const glm::vec4& vec) {
