@@ -24,6 +24,8 @@ public:
     virtual void draw_text(const std::string& text, const std::string& font, const glm::vec4& color, glm::vec2 position, float size) override;
     virtual float get_text_width(const std::string& text, const std::string& font) override;
 
+    void collect_garbage() const;
+
 private:
     glm::vec2 display_area;
     basic_shader_program* program;

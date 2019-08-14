@@ -132,6 +132,7 @@ public:
         glBindAttribLocation(program_msdf.get_program().get(), sushi::attrib_location::POSITION, "position");
         glBindAttribLocation(program_msdf.get_program().get(), sushi::attrib_location::TEXCOORD, "texcoord");
         glBindAttribLocation(program_msdf.get_program().get(), sushi::attrib_location::NORMAL, "normal");
+        glBindAttribLocation(program_msdf.get_program().get(), 3, "texSize");
 
         mesh_cache = [](const std::string& name) {
             return sushi::load_static_mesh_file("data/models/" + name + ".obj");
@@ -244,6 +245,8 @@ public:
         next_tick = std::chrono::duration_cast<clock::duration>(std::chrono::duration<std::int64_t, std::ratio<1, 30>>(1));
 
         enable_tracing = false;
+        
+        next_renderer_gc = clock::duration{0};
     }
 
     ~engine() {
@@ -523,6 +526,14 @@ public:
             renderer.end();
         }
 
+        TRACE("GUI GC") {
+            next_renderer_gc -= delta_time;
+            if (next_renderer_gc <= clock::duration{0}) {
+                renderer.collect_garbage();
+                next_renderer_gc = std::chrono::seconds{1};
+            }
+        }
+
         TRACE("LUA GC") {
             lua.collect_garbage();
         }
@@ -562,6 +573,7 @@ private:
     SoLoud::Soloud soloud;
     tracing::context tracing_context;
     bool enable_tracing;
+    clock::duration next_renderer_gc;
 };
 
 std::function<void()> loop;

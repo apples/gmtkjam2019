@@ -40,8 +40,6 @@ public:
     void set_normal_mat(const glm::mat4& mat);
     void set_msdf(int slot);
     void set_pxRange(float f);
-    void set_texSize(const glm::vec2& vec);
-    void set_texScale(float val);
     void set_fgColor(const glm::vec4& vec);
 
 private:
@@ -50,8 +48,6 @@ private:
         GLint normal_mat;
         GLint msdf;
         GLint pxRange;
-        GLint texSize;
-        GLint texScale;
         GLint fgColor;
     } uniforms;
 };

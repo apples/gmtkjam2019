@@ -3,22 +3,21 @@ precision mediump float;
 
 varying vec2 v_texcoord;
 varying vec3 v_normal;
+varying vec2 v_texSize;
 
 uniform sampler2D msdf;
 uniform float pxRange;
-uniform vec2 texSize;
 uniform vec4 fgColor;
-uniform float texScale;
 
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
 }
 
 void main() {
-    vec2 msdfUnit = pxRange/texSize;
+    vec2 msdfUnit = pxRange/v_texSize;
     vec3 sample = texture2D(msdf, v_texcoord).rgb;
     float sigDist = median(sample.r, sample.g, sample.b) - 0.5;
-    sigDist *= dot(msdfUnit, 0.5/fwidth(v_texcoord*texScale/texSize));
+    sigDist *= dot(msdfUnit, 0.5/fwidth(v_texcoord*v_texSize));
     float opacity = clamp(sigDist + 0.5, 0.0, 1.0);
     gl_FragColor = vec4(fgColor.rgb, fgColor.a*opacity);
 }

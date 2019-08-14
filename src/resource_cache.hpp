@@ -11,6 +11,7 @@ template <typename T, typename... S>
 class resource_cache {
 public:
     using factory_function = std::function<std::shared_ptr<T>(const S&...)>;
+    using cache_type = std::map<std::tuple<S...>, std::shared_ptr<T>>;
 
     template <typename F>
     using require_is_not_factory = std::enable_if_t<!std::is_convertible<std::decay_t<F>, factory_function>::value>*;
@@ -44,6 +45,10 @@ public:
         return ptr;
     }
 
+    const cache_type& get_cache() const {
+        return cache;
+    }
+
 private:
     template <typename F>
     static factory_function make_factory(F&& f) {
@@ -53,5 +58,5 @@ private:
     }
 
     factory_function factory;
-    std::map<std::tuple<S...>, std::shared_ptr<T>> cache;
+    cache_type cache;
 };
