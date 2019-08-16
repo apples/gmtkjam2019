@@ -41,6 +41,7 @@ public:
     void set_msdf(int slot);
     void set_pxRange(float f);
     void set_fgColor(const glm::vec4& vec);
+    void set_texelSize(float f);
 
 private:
     struct {
@@ -49,5 +50,6 @@ private:
         GLint msdf;
         GLint pxRange;
         GLint fgColor;
+        GLint texelSize;
     } uniforms;
 };

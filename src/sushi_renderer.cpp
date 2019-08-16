@@ -68,6 +68,7 @@ void sushi_renderer::draw_text(const std::string& text, const std::string& fontn
     program_msdf->set_pxRange(4.f);
     program_msdf->set_fgColor(color);
     program_msdf->set_MVP(proj * model);
+    program_msdf->set_texelSize(msdf_font::TEX_SIZE);
 
     for (const auto& chunk : font->get_text(text).chunks) {
         sushi::set_texture(0, font->get_texture(chunk.texture_index));

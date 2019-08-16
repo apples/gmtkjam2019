@@ -1,6 +1,5 @@
 #include "font.hpp"
 
-#include <iostream>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -95,6 +94,7 @@ const msdf_font::text_def& msdf_font::get_text(const std::string& str) const {
         for (const auto& [texture_index, data] : tex2data) {
             auto g = text_def_chunk{};
 
+            g.texture_index = texture_index;
             g.mesh.vao = sushi::make_unique_vertex_array();
             g.mesh.vertex_buffer = sushi::make_unique_buffer();
             g.mesh.num_triangles = data.num_tris;
@@ -124,8 +124,6 @@ const msdf_font::text_def& msdf_font::get_text(const std::string& str) const {
                 reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * (3 + 2 + 3)));
 
             glBindVertexArray(0);
-
-            g.texture_index = 0;
 
             text.chunks.push_back(std::move(g));
         }
@@ -159,16 +157,18 @@ const msdf_font::glyph_def* msdf_font::get_glyph(int unicode) const {
         double left = 0, bottom = 0, right = 0, top = 0;
         shape.bounds(left, bottom, right, top);
 
-        left -= 1;
-        bottom -= 1;
-        right += 1;
-        top += 1;
+        left -= 2;
+        bottom -= 2;
+        right += 2;
+        top += 2;
 
-        auto width = int(right - left + 1);
-        auto height = int(top - bottom + 1);
+        constexpr int scale = 1;
+
+        auto width = int(right - left) * scale;
+        auto height = int(top - bottom) * scale;
 
         msdfgen::Bitmap<msdfgen::FloatRGB> msdf(width, height);
-        msdfgen::generateMSDF(msdf, shape, 4.0, 1.0, msdfgen::Vector2(-left, -bottom));
+        msdfgen::generateMSDF(msdf, shape, 4.0, scale, msdfgen::Vector2(-left, -bottom));
 
         std::vector<unsigned char> pixels;
         pixels.reserve(4 * msdf.width() * msdf.height());
@@ -194,7 +194,7 @@ const msdf_font::glyph_def* msdf_font::get_glyph(int unicode) const {
 
         if (current_u + width > TEX_SIZE) {
             current_u = 0;
-            current_v += advance_v;
+            current_v += advance_v + 1;
             advance_v = 0;
         }
 
@@ -213,7 +213,9 @@ const msdf_font::glyph_def* msdf_font::get_glyph(int unicode) const {
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_SIZE, TEX_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+            const auto data = std::vector<GLubyte>(TEX_SIZE * TEX_SIZE * 4, 0);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_SIZE, TEX_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, &data[0]);
 
             g.texture_index = textures.size();
             textures.push_back(std::move(texture));
@@ -224,7 +226,7 @@ const msdf_font::glyph_def* msdf_font::get_glyph(int unicode) const {
 
         glTexSubImage2D(
             GL_TEXTURE_2D, 0, current_u, current_v, msdf.width(), msdf.height(), GL_RGBA, GL_UNSIGNED_BYTE, &pixels[0]);
-
+        
         const auto u = double(current_u) / double(TEX_SIZE);
         const auto v = double(current_v) / double(TEX_SIZE);
         const auto u2 = double(current_u + width) / double(TEX_SIZE);
@@ -238,7 +240,7 @@ const msdf_font::glyph_def* msdf_font::get_glyph(int unicode) const {
         g.advance = advance;
 
         advance_v = std::max(advance_v, height);
-        current_u += width;
+        current_u += width + 1;
 
         glyphs[unicode] = std::move(g);
     }

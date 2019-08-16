@@ -27,7 +27,7 @@ function debug_table:render()
                         height = 12,
                         color = '#fff',
                         text = s,
-                        top = self.props.top * (i - 1),
+                        top = self.props.top + 12 * (i - 1),
                         left = self.props.left,
                         right = self.props.right,
                     }
