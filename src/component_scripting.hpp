@@ -51,6 +51,11 @@ auto get_component(ember_database& db, ent_id eid) -> T& {
 }
 
 template <typename T>
+auto get_component_obj(ember_database& db, ent_id eid, sol::state_view lua) -> sol::object {
+    return sol::make_object(lua, std::ref(get_component<T>(db, eid)));
+}
+
+template <typename T>
 auto has_component(ember_database& db, ember_database::ent_id eid) -> bool {
     return db.has_component<T>(eid);
 }
@@ -66,6 +71,11 @@ void visit_tag(ember_database& db, const std::function<void(ember_database::ent_
 }
 
 } //namespace _detail
+
+struct dispatch_t {
+    auto (*has_component)(ember_database& db, ember_database::ent_id eid) -> bool;
+    auto (*get_component)(ember_database& db, ember_database::ent_id eid, sol::state_view lua) -> sol::object;
+};
 
 template <typename T>
 void register_usertype(scripting::token<T>, sol::simple_usertype<T>& usertype) {
@@ -83,6 +93,13 @@ void register_usertype(scripting::token<T>, sol::simple_usertype<T>& usertype) {
     usertype.set("_add_component", &_detail::add_component<T>);
     usertype.set("_remove_component", &_detail::remove_component<T>);
     usertype.set("_has_component", &_detail::has_component<T>);
+
+    static auto dispatch = dispatch_t{
+        &_detail::has_component<T>,
+        &_detail::get_component_obj<T>,
+    };
+
+    usertype.set("_dispatch", sol::make_light(dispatch));
 }
 
 } //namespace component

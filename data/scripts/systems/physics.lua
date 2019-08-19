@@ -140,10 +140,7 @@ function physics.visit(dt)
 
     trace_push('physics.visit[gather bodies]')
     for _,eid in ipairs(engine.entities:get_layer(game_state.layer)) do
-        if (
-            engine.entities:has_component(eid, component.position) and
-            engine.entities:has_component(eid, component.body)
-        ) then
+        if engine.entities:has_components(eid, component.position, component.body) then
             local position = engine.entities:get_component(eid, component.position)
             local body = engine.entities:get_component(eid, component.body)
             bodies[#bodies + 1] = {

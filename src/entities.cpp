@@ -1,6 +1,7 @@
 #include "entities.hpp"
 
 #include "components.hpp"
+#include "component_scripting.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -58,6 +59,14 @@ int ember_database::get_layer_of(ent_id eid) {
 
 namespace scripting {
 
+namespace { // static
+
+auto get_dispatch(const sol::table& table) -> const component::dispatch_t& {
+    return table["_dispatch"].get<sol::light<component::dispatch_t>>();
+}
+
+} // static
+
 template <>
 void register_type<ember_database>(sol::table& lua) {
     lua.new_usertype<ember_database::ent_id>("ent_id",
@@ -78,11 +87,27 @@ void register_type<ember_database>(sol::table& lua) {
         "remove_component", [](ember_database& db, ember_database::ent_id eid, sol::table com_type){
             return com_type["_remove_component"](db, eid);
         },
-        "get_component", [](ember_database& db, ember_database::ent_id eid, sol::table com_type){
-            return com_type["_get_component"](db, eid);
+        "get_component", [](ember_database& db, ember_database::ent_id eid, sol::table com_type, sol::this_state s){
+            auto lua = sol::state_view{s};
+            const auto& dispatch = get_dispatch(com_type);
+
+            return dispatch.get_component(db, eid, lua);
         },
         "has_component", [](ember_database& db, ember_database::ent_id eid, sol::table com_type){
-            return com_type["_has_component"](db, eid);
+            const auto& dispatch = get_dispatch(com_type);
+
+            return dispatch.has_component(db, eid);
+        },
+        "has_components", [](ember_database& db, ember_database::ent_id eid, sol::variadic_args args){
+            for (const auto& arg : args) {
+                const auto& dispatch = get_dispatch(arg.as<sol::table>());
+
+                if (!dispatch.has_component(db, eid)) {
+                    return false;
+                }
+            }
+
+            return true;
         },
         "visit", [](ember_database& db, sol::protected_function func){
             db.visit([&func](ember_database::ent_id eid) {
