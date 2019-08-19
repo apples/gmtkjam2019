@@ -1,6 +1,8 @@
 #include "font.hpp"
 
-#include <fstream>
+#include "tracing.hpp"
+
+#include <array>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -29,26 +31,40 @@ msdf_font::msdf_font(const std::string& fontname) {
 }
 
 const msdf_font::text_def& msdf_font::get_text(const std::string& str) const {
-    if (!texts.count(str)) {
+    auto _trace = tracing::push("msdf_font::get_text");
+
+    auto iter = texts.find(str);
+
+    if (iter == end(texts)) {
+        auto _trace = tracing::push("msdf_font::get_text[generate]");
+
         struct data_t {
-            std::vector<GLfloat> buffer;
-            int num_tris;
+            std::vector<glm::vec3> positions;
+            std::vector<glm::vec2> texcoords;
+            std::vector<glm::vec3> normals = {{0.f, 0.f, 1.f}};
+            std::vector<sushi::Tri> tris;
         };
 
         std::unordered_map<int, data_t> tex2data;
 
-        auto push_vertex = [&tex2data](int texture_index, glm::vec3 pos, glm::vec3 norm, glm::vec2 tex, glm::vec2 scale) {
-            auto& data = tex2data[texture_index];
-            data.buffer.push_back(pos.x);
-            data.buffer.push_back(pos.y);
-            data.buffer.push_back(pos.z);
-            data.buffer.push_back(tex.x);
-            data.buffer.push_back(tex.y);
-            data.buffer.push_back(norm.x);
-            data.buffer.push_back(norm.y);
-            data.buffer.push_back(norm.z);
-            data.buffer.push_back(scale.x);
-            data.buffer.push_back(scale.y);
+        auto push_quad = [](data_t& data, std::array<glm::vec3, 4> pos, std::array<glm::vec2, 4> uv) {
+            data.positions.insert(end(data.positions), begin(pos), end(pos));
+            data.texcoords.insert(end(data.texcoords), begin(uv), end(uv));
+
+            const auto pos_idx = data.positions.size() - 4;
+            const auto uv_idx = data.positions.size() - 4;
+
+            data.tris.push_back({{
+                {pos_idx, 0, uv_idx},
+                {pos_idx + 1, 0, uv_idx + 1},
+                {pos_idx + 2, 0, uv_idx + 2},
+            }});
+
+            data.tris.push_back({{
+                {pos_idx + 2, 0, uv_idx + 2},
+                {pos_idx + 3, 0, uv_idx + 3},
+                {pos_idx, 0, uv_idx},
+            }});
         };
 
         {
@@ -61,28 +77,23 @@ const msdf_font::text_def& msdf_font::get_text(const std::string& str) const {
 
                 if (!glyph) continue;
 
-                push_vertex(
-                    glyph->texture_index, {advance + glyph->pos[0].x, glyph->pos[0].y, 0.f}, {0.f, 0.f, 1.f}, glyph->uv[0], glyph->scale);
-                push_vertex(
-                    glyph->texture_index,
-                    {advance + glyph->pos[0].x, glyph->pos[1].y, 0.f},
-                    {0.f, 0.f, 1.f},
-                    {glyph->uv[0].x, glyph->uv[1].y},
-                    glyph->scale);
-                push_vertex(
-                    glyph->texture_index, {advance + glyph->pos[1].x, glyph->pos[1].y, 0.f}, {0.f, 0.f, 1.f}, glyph->uv[1], glyph->scale);
-                push_vertex(
-                    glyph->texture_index, {advance + glyph->pos[1].x, glyph->pos[1].y, 0.f}, {0.f, 0.f, 1.f}, glyph->uv[1], glyph->scale);
-                push_vertex(
-                    glyph->texture_index,
-                    {advance + glyph->pos[1].x, glyph->pos[0].y, 0.f},
-                    {0.f, 0.f, 1.f},
-                    {glyph->uv[1].x, glyph->uv[0].y},
-                    glyph->scale);
-                push_vertex(
-                    glyph->texture_index, {advance + glyph->pos[0].x, glyph->pos[0].y, 0.f}, {0.f, 0.f, 1.f}, glyph->uv[0], glyph->scale);
+                auto& data = tex2data[glyph->texture_index];
 
-                tex2data[glyph->texture_index].num_tris += 2;
+                push_quad(
+                    data,
+                    {{
+                        { glyph->pos[0].x + advance, glyph->pos[0].y, 0.f },
+                        { glyph->pos[0].x + advance, glyph->pos[1].y, 0.f },
+                        { glyph->pos[1].x + advance, glyph->pos[1].y, 0.f },
+                        { glyph->pos[1].x + advance, glyph->pos[0].y, 0.f },
+                    }},
+                    {{
+                        glyph->uv[0],
+                        { glyph->uv[0].x, glyph->uv[1].y },
+                        glyph->uv[1],
+                        { glyph->uv[1].x, glyph->uv[0].y },
+                    }});
+
                 advance += glyph->advance;
             }
         }
@@ -94,48 +105,18 @@ const msdf_font::text_def& msdf_font::get_text(const std::string& str) const {
         for (const auto& [texture_index, data] : tex2data) {
             auto g = text_def_chunk{};
 
+            g.mesh = sushi::load_static_mesh_data(data.positions, data.normals, data.texcoords, data.tris);
             g.texture_index = texture_index;
-            g.mesh.vao = sushi::make_unique_vertex_array();
-            g.mesh.vertex_buffer = sushi::make_unique_buffer();
-            g.mesh.num_triangles = data.num_tris;
-            g.mesh.bounding_sphere = 0;
-
-            glBindBuffer(GL_ARRAY_BUFFER, g.mesh.vertex_buffer.get());
-            glBufferData(GL_ARRAY_BUFFER, data.buffer.size() * sizeof(GLfloat), &data.buffer[0], GL_STATIC_DRAW);
-
-            glBindVertexArray(g.mesh.vao.get());
-
-            auto stride = sizeof(GLfloat) * (3 + 2 + 3 + 2);
-            glEnableVertexAttribArray(sushi::attrib_location::POSITION);
-            glEnableVertexAttribArray(sushi::attrib_location::TEXCOORD);
-            glEnableVertexAttribArray(sushi::attrib_location::NORMAL);
-            glEnableVertexAttribArray(3);
-            glVertexAttribPointer(
-                sushi::attrib_location::POSITION, 3, GL_FLOAT, GL_FALSE, stride,
-                reinterpret_cast<const GLvoid *>(0));
-            glVertexAttribPointer(
-                sushi::attrib_location::TEXCOORD, 2, GL_FLOAT, GL_FALSE, stride,
-                reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * 3));
-            glVertexAttribPointer(
-                sushi::attrib_location::NORMAL, 3, GL_FLOAT, GL_FALSE, stride,
-                reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * (3 + 2)));
-            glVertexAttribPointer(
-                3, 2, GL_FLOAT, GL_FALSE, stride,
-                reinterpret_cast<const GLvoid *>(sizeof(GLfloat) * (3 + 2 + 3)));
-
-            glBindVertexArray(0);
 
             text.chunks.push_back(std::move(g));
         }
 
-        texts[str] = std::move(text);
+        iter = texts.insert_or_assign(str, std::move(text)).first;
     }
 
-    auto& ret = texts[str];
+    iter->second.hits += 1;
 
-    ++ret.hits;
-
-    return ret;
+    return iter->second;
 }
 
 const sushi::texture_2d& msdf_font::get_texture(int i) const {
@@ -162,13 +143,8 @@ const msdf_font::glyph_def* msdf_font::get_glyph(int unicode) const {
         right += 2;
         top += 2;
 
-        constexpr int scale = 1;
-
-        auto width = int(right - left) * scale;
-        auto height = int(top - bottom) * scale;
-
-        msdfgen::Bitmap<msdfgen::FloatRGB> msdf(width, height);
-        msdfgen::generateMSDF(msdf, shape, 4.0, scale, msdfgen::Vector2(-left, -bottom));
+        msdfgen::Bitmap<msdfgen::FloatRGB> msdf(right - left, top - bottom);
+        msdfgen::generateMSDF(msdf, shape, 4.0, 1.0, msdfgen::Vector2(-left, -bottom));
 
         std::vector<unsigned char> pixels;
         pixels.reserve(4 * msdf.width() * msdf.height());
@@ -192,13 +168,13 @@ const msdf_font::glyph_def* msdf_font::get_glyph(int unicode) const {
 
         auto g = glyph_def{};
 
-        if (current_u + width > TEX_SIZE) {
+        if (current_u + msdf.width() > TEX_SIZE) {
             current_u = 0;
             current_v += advance_v + 1;
             advance_v = 0;
         }
 
-        if (textures.empty() || current_v + height > TEX_SIZE) {
+        if (textures.empty() || current_v + msdf.height() > TEX_SIZE) {
             current_u = 0;
             current_v = 0;
             advance_v = 0;
@@ -229,18 +205,17 @@ const msdf_font::glyph_def* msdf_font::get_glyph(int unicode) const {
         
         const auto u = double(current_u) / double(TEX_SIZE);
         const auto v = double(current_v) / double(TEX_SIZE);
-        const auto u2 = double(current_u + width) / double(TEX_SIZE);
-        const auto v2 = double(current_v + height) / double(TEX_SIZE);
+        const auto u2 = double(current_u + msdf.width()) / double(TEX_SIZE);
+        const auto v2 = double(current_v + msdf.height()) / double(TEX_SIZE);
 
         g.pos[0] = {left, bottom};
         g.pos[1] = {right, top};
         g.uv[0] = {u, v};
         g.uv[1] = {u2, v2};
-        g.scale = float(TEX_SIZE) / glm::vec2{width, height};
         g.advance = advance;
 
-        advance_v = std::max(advance_v, height);
-        current_u += width + 1;
+        advance_v = std::max(advance_v, msdf.height());
+        current_u += msdf.width() + 1;
 
         glyphs[unicode] = std::move(g);
     }

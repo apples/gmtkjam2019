@@ -34,7 +34,6 @@ public:
     struct glyph_def {
         glm::vec2 pos[2] = {};
         glm::vec2 uv[2] = {};
-        glm::vec2 scale = {};
         int texture_index = 0;
         float advance = 0;
     };

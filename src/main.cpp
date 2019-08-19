@@ -374,7 +374,7 @@ public:
                 debug_vals.push_back(dur);
             }
 
-            for (int i = 0; i < 10 && i < sorted_entries.size(); ++i) {
+            for (int i = 0; i < 30 && i < sorted_entries.size(); ++i) {
                 const auto& entry = sorted_entries[i];
 
                 auto us = std::chrono::duration_cast<std::chrono::microseconds>(entry.self_time).count();

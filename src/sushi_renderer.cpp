@@ -1,5 +1,7 @@
 #include "sushi_renderer.hpp"
 
+#include "tracing.hpp"
+
 #include <glm/gtc/matrix_inverse.hpp>
 
 sushi_renderer::sushi_renderer(const glm::vec2& display_area, basic_shader_program& program, msdf_shader_program& program_msdf, cache<msdf_font>& font_cache, cache<sushi::texture_2d>& texture_cache) :
@@ -59,6 +61,7 @@ float sushi_renderer::get_text_width(const std::string& text, const std::string&
 }
 
 void sushi_renderer::draw_text(const std::string& text, const std::string& fontname, const glm::vec4& color, glm::vec2 position, float size) {
+    auto _trace = tracing::push("sushi_renderer::draw_text");
     auto font = font_cache->get(fontname);
     auto proj = glm::ortho(0.f, display_area.x, 0.f, display_area.y, -1.f, 1.f);
     auto model = glm::scale(glm::translate(glm::mat4(1.f), glm::vec3(position, 0.f)), glm::vec3{size, size, 1.f});

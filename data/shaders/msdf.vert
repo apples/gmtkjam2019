@@ -5,7 +5,6 @@ attribute vec2 texSize;
 
 varying vec2 v_texcoord;
 varying vec3 v_normal;
-varying vec2 v_texSize;
 
 uniform mat4 MVP;
 uniform mat4 normal_mat;
@@ -14,6 +13,5 @@ void main()
 {
     v_texcoord = texcoord;
     v_normal = vec3(normal_mat * vec4(normal, 0.0));
-    v_texSize = texSize;
     gl_Position = MVP * vec4(position, 1.0);
 }
