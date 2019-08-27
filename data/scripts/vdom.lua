@@ -1,8 +1,6 @@
 local linq = require('linq')
 local class = require('class')
 
-local component_base = class()
-
 local function assign(dest, source)
     for k,v in pairs(source) do
         dest[k] = v
@@ -38,13 +36,7 @@ end
 
 -- Determines if the given object is either a function or a class derived from component_base
 local function is_component_type(cls)
-    if type(cls) == 'function' then return true end
-    if type(cls) ~= 'table' then return false end
-    local mt = cls
-    while mt ~= nil and mt ~= component_base do
-        mt = getmetatable(mt).__index
-    end
-    return mt == component_base
+    return type(cls) == 'function'
 end
 
 -- Determines if the argument is a cdom element created by create_element
@@ -159,6 +151,10 @@ local function get_next_effect()
     return effect
 end
 
+local function get_context_provider(instance)
+    return instance.context and instance or instance.context_provider
+end
+
 -- Instantiates a new instance
 local function instantiate(element, parent_widget, context_provider)
     assert(is_vdom_element(element))
@@ -193,36 +189,25 @@ local function instantiate(element, parent_widget, context_provider)
         return {
             widget = widget,
             element = element,
-            child_instances = child_instances
+            child_instances = child_instances,
+            context_provider = context_provider
         }
-    elseif type(element_type) == 'table' then
-        -- Instantiate class component element
-
-        local instance = {}
-        local component_instance = create_component_instance(element, instance)
-        local child_element = component_instance:render()
-        local child_instance = instantiate(child_element, parent_widget, context_provider)
-
-        instance.widget = child_instance.widget
-        instance.element = element
-        instance.child_element = child_element
-        instance.child_instance = child_instance
-        instance.component_instance = component_instance
-
-        return instance
     else
-        -- Instantiate function component element
+        -- Instantiate component element
 
         local instance = {}
 
         instance.context_provider = context_provider
 
+        if not context_provider then
+            print('Warning: no context')
+        end
+
         set_current_instance(instance)
         local child_element = element.type(element.props)
         clear_current_instance()
 
-        local child_context_provider = instance.context and instance or context_provider
-        local child_instance = instantiate(child_element, parent_widget, child_context_provider)
+        local child_instance = instantiate(child_element, parent_widget, get_context_provider(instance))
 
         instance.widget = child_instance.widget
         instance.element = element
@@ -238,17 +223,11 @@ local function update_component(instance, props)
     assert(is_instance(instance))
     assert(type(props) == 'table')
 
-    if type(instance.component_instance) == 'table' then
-        -- Class component
-        instance.component_instance.props = props
-        return instance.component_instance:render()
-    else
-        -- Functional component
-        set_current_instance(instance)
-        local child = instance.element.type(props)
-        clear_current_instance()
-        return child
-    end
+    set_current_instance(instance)
+    local child = instance.element.type(props)
+    clear_current_instance()
+
+    return child
 end
 
 local reconcile -- forward
@@ -260,6 +239,7 @@ local function reconcile_children(instance, element)
 
     local widget = instance.widget
     local child_instances = instance.child_instances
+    local child_context_provider = get_context_provider(instance)
     local next_child_elements = element.children
     local new_child_instances = {}
     local count = math.max(#child_instances, #next_child_elements)
@@ -267,7 +247,7 @@ local function reconcile_children(instance, element)
     for i = 1, count do
         local child_instance = child_instances[i]
         local child_element = next_child_elements[i]
-        local new_child_instance = reconcile(widget, child_instance, child_element)
+        local new_child_instance = reconcile(widget, child_instance, child_element, child_context_provider)
 
         if new_child_instance then
             new_child_instances[#new_child_instances + 1] = new_child_instance
@@ -281,10 +261,8 @@ end
 local function cleanup(instance)
     assert(is_instance(instance))
 
-    instance.widget = nil
-
     if instance.effects then
-        for _,v in ipairs(effects) do
+        for _,effect in ipairs(instance.effects) do
             assert(type(effect.on_unmount) == 'function')
             effect.on_unmount()
         end
@@ -299,9 +277,11 @@ local function cleanup(instance)
             cleanup(v)
         end
     end
+
+    instance.widget = nil
 end
 
-reconcile = function (parent_widget, instance, element)
+reconcile = function (parent_widget, instance, element, context_provider)
     assert(parent_widget ~= nil)
     assert(instance == nil or is_instance(instance))
     assert(element == nil or is_vdom_element(element))
@@ -309,7 +289,7 @@ reconcile = function (parent_widget, instance, element)
     if instance == nil then
         -- Create instance
 
-        local new_instance = instantiate(element, parent_widget)
+        local new_instance = instantiate(element, parent_widget, context_provider)
 
         parent_widget:add_child(new_instance.widget)
 
@@ -324,7 +304,7 @@ reconcile = function (parent_widget, instance, element)
     elseif instance.element.type ~= element.type then
         -- Replace instance
 
-        local new_instance = instantiate(element, parent_widget)
+        local new_instance = instantiate(element, parent_widget, get_context_provider(instance))
 
         parent_widget:replace_child(instance.widget, new_instance.widget)
         cleanup(instance)
@@ -346,7 +326,11 @@ reconcile = function (parent_widget, instance, element)
 
         if child_element ~= instance.child_element then
             local old_child_instance = instance.child_instance
-            local child_instance = reconcile(parent_widget, old_child_instance, child_element)
+            local child_instance = reconcile(
+                parent_widget,
+                old_child_instance,
+                child_element,
+                get_context_provider(instance))
 
             instance.widget = child_instance.widget
             instance.child_element = child_element
@@ -356,6 +340,18 @@ reconcile = function (parent_widget, instance, element)
 
         return instance
     end
+end
+
+local function shallow_equals(a, b)
+    local n = 0
+    for k,v in pairs(a) do
+        if b[k] ~= v then return false end
+        n = n + 1
+    end
+    for k,v in pairs(b) do
+        n = n - 1
+    end
+    return n == 0
 end
 
 -- Instances queued for update
@@ -370,32 +366,14 @@ end
 local function flush_updates()
     while #queued_updates > 0 do
         local instance = table.remove(queued_updates)
-        local parent_widget = instance.widget:get_parent()
-        local element = instance.element
 
-        reconcile(parent_widget, instance, element)
+        if instance.widget then
+            local parent_widget = instance.widget:get_parent()
+            local element = instance.element
+
+            reconcile(parent_widget, instance, element, get_context_provider(instance))
+        end
     end
-end
-
-function component_base:constructor(props)
-    self.props = props
-    self.state = self.state or {}
-end
-
-function component_base:set_state(partial_state)
-    assert(type(partial_state) == 'table')
-
-    local new_state = {}
-    assign(new_state, self.state)
-    assign(new_state, partial_state)
-
-    self.state = new_state
-
-    queue_update(self.internal_instance)
-end
-
-local function component()
-    return class(component_base)
 end
 
 local function create_element(element_type, config, ...)
@@ -440,7 +418,7 @@ local function render(element, container, instance)
     assert(container ~= nil)
     assert(instance == nil or is_instance(instance))
 
-    return reconcile(container, instance, element)
+    return reconcile(container, instance, element, instance and get_context_provider(instance))
 end
 
 local function useContextProvider(init)
@@ -477,7 +455,7 @@ local function useContext()
         effect.on_unmount = function ()
             for i,subscriber in ipairs(context.subscribers) do
                 if subscriber == instance then
-                    table.remove(i)
+                    table.remove(context.subscribers, i)
                     break
                 end
             end
@@ -510,11 +488,7 @@ local function useMemo(func, deps)
     local hook = get_next_hook()
 
     local function needs_recalc()
-        if #deps ~= #hook.deps then return true end
-        for i=1,#deps do
-            if deps[i] ~= hook.deps[i] then return true end
-        end
-        return false
+        return not shallow_equals(deps, hook.deps)
     end
     
     if hook.deps == nil or needs_recalc() then
@@ -530,7 +504,6 @@ local function useCallback(func, deps)
 end
 
 return {
-    component = component,
     create_element = create_element,
     render = render,
     flush_updates = flush_updates,
