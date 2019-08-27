@@ -14,6 +14,7 @@ local function is_event_name(str)
     return string.sub(str, 1, 3) == 'on_'
 end
 
+-- Updates the widget events and attributes based on the props
 local function update_widget_properties(widget, prev_props, next_props)
     for k,v in pairs(prev_props) do
         if next_props[k] == nil then
@@ -35,6 +36,7 @@ local function update_widget_properties(widget, prev_props, next_props)
     end
 end
 
+-- Determines if the given object is either a function or a class derived from component_base
 local function is_component_type(cls)
     if type(cls) == 'function' then return true end
     if type(cls) ~= 'table' then return false end
@@ -45,6 +47,7 @@ local function is_component_type(cls)
     return mt == component_base
 end
 
+-- Determines if the argument is a cdom element created by create_element
 local function is_vdom_element(element)
     return type(element) == 'table' and
         (type(element.type) == 'string' or is_component_type(element.type)) and
@@ -52,43 +55,7 @@ local function is_vdom_element(element)
         element.children ~= nil
 end
 
-local function create_element(element_type, config, ...)
-    assert(type(element_type) == 'string' or is_component_type(element_type))
-    assert(type(config) == 'nil' or type(config) == 'table')
-
-    local props = assign({}, config or {})
-
-    local children = {}
-
-    local function add_child(child)
-        if is_vdom_element(child) then
-            children[#children + 1] = child
-        elseif child then
-            children[#children + 1] = create_element('_TEXT_ELEMENT_', { node_value = tostring(child) })
-        end
-    end
-
-    local count = select('#', ...)
-
-    for i=1,count do
-        local child = select(i, ...)
-
-        if type(child) == 'table' and not is_vdom_element(child) then
-            for _,v in ipairs(child) do
-                add_child(v)
-            end
-        else
-            add_child(child)
-        end
-    end
-
-    return {
-        type = element_type,
-        props = props,
-        children = children,
-    }
-end
-
+-- Constructs a new component instance
 local function create_component_instance(element, instance)
     assert(is_vdom_element(element))
     assert(type(instance) == 'table')
@@ -103,7 +70,97 @@ local function create_component_instance(element, instance)
     return component_instance
 end
 
-local function instantiate(element, parent_widget)
+-- Determines if the argument is an instance
+local function is_instance(instance)
+    return type(instance) == 'table' and
+        instance.widget ~= nil and
+        is_vdom_element(instance.element) and (
+            type(instance.child_instances) == 'table' or -- widget instance
+            is_vdom_element(instance.child_element) and is_instance(instance.child_instance) -- component instance
+        )
+end
+
+-- Determines if the argument is a widget (non-component) instance
+local function is_widget_instance(instance)
+    return is_instance(instance) and
+        type(instance.child_instances) == 'table'
+end
+
+-- [private] The currently-rendering instances (used by hooks)
+local current_instance = {}
+local current_instance_progress = {}
+
+-- Sets the currently-rendering instance
+local function set_current_instance(instance)
+    assert(#current_instance < 1024) -- Infinite recursion safeguard
+    assert(type(instance) == 'table')
+
+    table.insert(current_instance, instance)
+    table.insert(current_instance_progress, {
+        hook_index = 1,
+        effect_index = 1
+    })
+end
+
+-- Clears the currently-rendering instance
+local function clear_current_instance()
+    assert(#current_instance > 0)
+    assert(#current_instance_progress > 0)
+
+    table.remove(current_instance)
+    table.remove(current_instance_progress)
+end
+
+-- Gets the currently-rendering instance and its progress
+local function get_current_instance()
+    assert(#current_instance > 0)
+    assert(#current_instance_progress > 0)
+
+    return current_instance[#current_instance], current_instance_progress[#current_instance_progress]
+end
+
+-- Gets or creates the next hook
+local function get_next_hook()
+    local instance, progress = get_current_instance()
+
+    if instance.hooks == nil then
+        instance.hooks = {}
+    end
+
+    local hook = instance.hooks[progress.hook_index]
+
+    if hook == nil then
+        hook = {}
+        instance.hooks[progress.hook_index] = hook
+    end
+
+    progress.hook_index = progress.hook_index + 1
+
+    return hook
+end
+
+-- Gets or creates the effect at the current index
+local function get_next_effect()
+    local instance, progress = get_current_instance()
+
+    if instance.effects == nil then
+        instance.effects = {}
+    end
+
+    local effect = instance.effects[progress.effect_index]
+
+    if effect == nil then
+        effect = {}
+        instance.effects[progress.effect_index] = effect
+    end
+
+    progress.effect_index = progress.effect_index + 1
+
+    return effect
+end
+
+-- Instantiates a new instance
+local function instantiate(element, parent_widget, context_provider)
     assert(is_vdom_element(element))
 
     local element_type = element.type
@@ -122,7 +179,7 @@ local function instantiate(element, parent_widget)
         update_widget_properties(widget, {}, props)
 
         local child_instances = linq(children)
-        :select(function (c) return instantiate(c, widget) end)
+        :select(function (c) return instantiate(c, widget, context_provider) end)
             :tolist()
 
         local child_widgets = linq(child_instances)
@@ -144,7 +201,7 @@ local function instantiate(element, parent_widget)
         local instance = {}
         local component_instance = create_component_instance(element, instance)
         local child_element = component_instance:render()
-        local child_instance = instantiate(child_element, parent_widget)
+        local child_instance = instantiate(child_element, parent_widget, context_provider)
 
         instance.widget = child_instance.widget
         instance.element = element
@@ -157,8 +214,15 @@ local function instantiate(element, parent_widget)
         -- Instantiate function component element
 
         local instance = {}
+
+        instance.context_provider = context_provider
+
+        set_current_instance(instance)
         local child_element = element.type(element.props)
-        local child_instance = instantiate(child_element, parent_widget)
+        clear_current_instance()
+
+        local child_context_provider = instance.context and instance or context_provider
+        local child_instance = instantiate(child_element, parent_widget, child_context_provider)
 
         instance.widget = child_instance.widget
         instance.element = element
@@ -167,22 +231,6 @@ local function instantiate(element, parent_widget)
 
         return instance
     end
-end
-
--- Determines if the argument is an instance
-local function is_instance(instance)
-    return type(instance) == 'table' and
-        instance.widget ~= nil and
-        is_vdom_element(instance.element) and (
-            type(instance.child_instances) == 'table' or -- widget instance
-            is_vdom_element(instance.child_element) and is_instance(instance.child_instance) -- component instance
-        )
-end
-
--- Determines if the argument is a widget (non-component) instance
-local function is_widget_instance(instance)
-    return is_instance(instance) and
-        type(instance.child_instances) == 'table'
 end
 
 -- Updates a component instance with new props
@@ -196,7 +244,10 @@ local function update_component(instance, props)
         return instance.component_instance:render()
     else
         -- Functional component
-        return instance.element.type(props)
+        set_current_instance(instance)
+        local child = instance.element.type(props)
+        clear_current_instance()
+        return child
     end
 end
 
@@ -231,6 +282,13 @@ local function cleanup(instance)
     assert(is_instance(instance))
 
     instance.widget = nil
+
+    if instance.effects then
+        for _,v in ipairs(effects) do
+            assert(type(effect.on_unmount) == 'function')
+            effect.on_unmount()
+        end
+    end
 
     if instance.child_instance then
         cleanup(instance.child_instance)
@@ -300,12 +358,23 @@ reconcile = function (parent_widget, instance, element)
     end
 end
 
-local function render(element, container, instance)
-    assert(is_vdom_element(element))
-    assert(container ~= nil)
-    assert(instance == nil or is_instance(instance))
+-- Instances queued for update
+local queued_updates = {}
 
-    return reconcile(container, instance, element)
+local function queue_update(instance)
+    assert(is_instance(instance))
+
+    table.insert(queued_updates, instance)
+end
+
+local function flush_updates()
+    while #queued_updates > 0 do
+        local instance = table.remove(queued_updates)
+        local parent_widget = instance.widget:get_parent()
+        local element = instance.element
+
+        reconcile(parent_widget, instance, element)
+    end
 end
 
 function component_base:constructor(props)
@@ -314,7 +383,6 @@ function component_base:constructor(props)
 end
 
 function component_base:set_state(partial_state)
-    trace_push('vdom.lua: component_base.set_state')
     assert(type(partial_state) == 'table')
 
     local new_state = {}
@@ -323,20 +391,152 @@ function component_base:set_state(partial_state)
 
     self.state = new_state
 
-    local internal_instance = self.internal_instance
-    local parent_widget = internal_instance.widget:get_parent()
-    local element = internal_instance.element
-
-    reconcile(parent_widget, internal_instance, element)
-    trace_pop('vdom.lua: component_base.set_state')
+    queue_update(self.internal_instance)
 end
 
 local function component()
     return class(component_base)
 end
 
+local function create_element(element_type, config, ...)
+    assert(type(element_type) == 'string' or is_component_type(element_type))
+    assert(type(config) == 'nil' or type(config) == 'table')
+
+    local props = assign({}, config or {})
+
+    local children = {}
+
+    local function add_child(child)
+        if is_vdom_element(child) then
+            children[#children + 1] = child
+        elseif child then
+            children[#children + 1] = create_element('_TEXT_ELEMENT_', { node_value = tostring(child) })
+        end
+    end
+
+    local count = select('#', ...)
+
+    for i=1,count do
+        local child = select(i, ...)
+
+        if type(child) == 'table' and not is_vdom_element(child) then
+            for _,v in ipairs(child) do
+                add_child(v)
+            end
+        else
+            add_child(child)
+        end
+    end
+
+    return {
+        type = element_type,
+        props = props,
+        children = children,
+    }
+end
+
+local function render(element, container, instance)
+    assert(is_vdom_element(element))
+    assert(container ~= nil)
+    assert(instance == nil or is_instance(instance))
+
+    return reconcile(container, instance, element)
+end
+
+local function useContextProvider(init)
+    local instance = get_current_instance()
+
+    if instance.context == nil then
+        instance.context = {
+            state = init(),
+            setState = function (newState)
+                instance.context.state = newState
+                for _,subscriber in ipairs(instance.context.subscribers) do
+                    queue_update(subscriber)
+                end
+            end,
+            subscribers = {}
+        }
+    end
+
+    return instance.context.setState, instance.context.state
+end
+
+local function useContext()
+    local instance = get_current_instance()
+
+    assert(instance.context_provider)
+
+    local effect = get_next_effect()
+
+    if effect.on_unmount == nil then
+        local context = instance.context_provider.context
+        context.subscribers[#context.subscribers + 1] = instance
+
+        effect.context = context
+        effect.on_unmount = function ()
+            for i,subscriber in ipairs(context.subscribers) do
+                if subscriber == instance then
+                    table.remove(i)
+                    break
+                end
+            end
+        end
+    end
+
+    return effect.context.state
+end
+
+local function useState(init)
+    local instance = get_current_instance()
+    local hook = get_next_hook()
+
+    if hook.setState == nil then
+        if type(init) == 'function' then
+            hook.state = init()
+        else
+            hook.state = init
+        end
+        hook.setState = function (newState)
+            hook.state = newState
+            queue_update(instance)
+        end
+    end
+
+    return hook.state, hook.setState
+end
+
+local function useMemo(func, deps)
+    local hook = get_next_hook()
+
+    local function needs_recalc()
+        if #deps ~= #hook.deps then return true end
+        for i=1,#deps do
+            if deps[i] ~= hook.deps[i] then return true end
+        end
+        return false
+    end
+    
+    if hook.deps == nil or needs_recalc() then
+        hook.value = func()
+        hook.deps = deps
+    end
+
+    return hook.value
+end
+
+local function useCallback(func, deps)
+    return useMemo(function () return func end, deps)
+end
+
 return {
     component = component,
     create_element = create_element,
-    render = render
+    render = render,
+    flush_updates = flush_updates,
+    useContextProvider = useContextProvider,
+    useContext = useContext,
+    useState = useState,
+    useMemo = useMemo,
+    useCallback = useCallback
 }
