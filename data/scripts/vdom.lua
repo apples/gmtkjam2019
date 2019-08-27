@@ -35,14 +35,8 @@ local function update_widget_properties(widget, prev_props, next_props)
     end
 end
 
-local function is_vdom_element(element)
-    return type(element) == 'table' and
-        element.type ~= nil and
-        element.props ~= nil and
-        element.children ~= nil
-end
-
 local function is_component_type(cls)
+    if type(cls) == 'function' then return true end
     if type(cls) ~= 'table' then return false end
     local mt = cls
     while mt ~= nil and mt ~= component_base do
@@ -51,40 +45,42 @@ local function is_component_type(cls)
     return mt == component_base
 end
 
-local function is_component_instance(com)
-    return type(com) == 'table' and
-        is_component_type(getmetatable(com))
+local function is_vdom_element(element)
+    return type(element) == 'table' and
+        (type(element.type) == 'string' or is_component_type(element.type)) and
+        type(element.props) == 'table' and
+        element.children ~= nil
 end
 
-local create_element
-
-local function flatten_children(out, ...)
-    if select('#', ...) == 0 then 
-        return
-    end
-
-    local head = ...
-
-    if is_vdom_element(head) then
-        out[#out + 1] = head
-    elseif type(head) == 'table' then
-        flatten_children(out, table.unpack(head))
-    elseif head ~= nil and head ~= false then
-        out[#out + 1] = create_element('_TEXT_ELEMENT_', { node_value = tostring(head) })
-    end
-
-    return flatten_children(out, select(2, ...))
-end
-
-create_element = function (element_type, config, ...)
-    --assert(type(element_type) == 'string' or is_component_type(element_type))
-    --assert(type(config) == 'nil' or type(config) == 'table')
+local function create_element(element_type, config, ...)
+    assert(type(element_type) == 'string' or is_component_type(element_type))
+    assert(type(config) == 'nil' or type(config) == 'table')
 
     local props = assign({}, config or {})
 
     local children = {}
 
-    flatten_children(children, ...)
+    local function add_child(child)
+        if is_vdom_element(child) then
+            children[#children + 1] = child
+        elseif child then
+            children[#children + 1] = create_element('_TEXT_ELEMENT_', { node_value = tostring(child) })
+        end
+    end
+
+    local count = select('#', ...)
+
+    for i=1,count do
+        local child = select(i, ...)
+
+        if type(child) == 'table' and not is_vdom_element(child) then
+            for _,v in ipairs(child) do
+                add_child(v)
+            end
+        else
+            add_child(child)
+        end
+    end
 
     return {
         type = element_type,
@@ -94,8 +90,8 @@ create_element = function (element_type, config, ...)
 end
 
 local function create_component_instance(element, instance)
-    --assert(is_vdom_element(element))
-    --assert(type(instance) == 'table')
+    assert(is_vdom_element(element))
+    assert(type(instance) == 'table')
 
     local element_type = element.type
     local props = element.props
@@ -108,7 +104,7 @@ local function create_component_instance(element, instance)
 end
 
 local function instantiate(element, parent_widget)
-    --assert(is_vdom_element(element))
+    assert(is_vdom_element(element))
 
     local element_type = element.type
     local props = element.props
@@ -142,7 +138,9 @@ local function instantiate(element, parent_widget)
             element = element,
             child_instances = child_instances
         }
-    else
+    elseif type(element_type) == 'table' then
+        -- Instantiate class component element
+
         local instance = {}
         local component_instance = create_component_instance(element, instance)
         local child_element = component_instance:render()
@@ -150,35 +148,64 @@ local function instantiate(element, parent_widget)
 
         instance.widget = child_instance.widget
         instance.element = element
+        instance.child_element = child_element
         instance.child_instance = child_instance
         instance.component_instance = component_instance
+
+        return instance
+    else
+        -- Instantiate function component element
+
+        local instance = {}
+        local child_element = element.type(element.props)
+        local child_instance = instantiate(child_element, parent_widget)
+
+        instance.widget = child_instance.widget
+        instance.element = element
+        instance.child_element = child_element
+        instance.child_instance = child_instance
 
         return instance
     end
 end
 
+-- Determines if the argument is an instance
 local function is_instance(instance)
     return type(instance) == 'table' and
         instance.widget ~= nil and
-        is_vdom_element(instance.element)
+        is_vdom_element(instance.element) and (
+            type(instance.child_instances) == 'table' or -- widget instance
+            is_vdom_element(instance.child_element) and is_instance(instance.child_instance) -- component instance
+        )
 end
 
+-- Determines if the argument is a widget (non-component) instance
 local function is_widget_instance(instance)
     return is_instance(instance) and
         type(instance.child_instances) == 'table'
 end
 
-local function is_component_instance(instance)
-    return is_instance(instance) and
-        is_instance(instance.child_instance) and
-        is_component_instance(instance.component_instance)
+-- Updates a component instance with new props
+local function update_component(instance, props)
+    assert(is_instance(instance))
+    assert(type(props) == 'table')
+
+    if type(instance.component_instance) == 'table' then
+        -- Class component
+        instance.component_instance.props = props
+        return instance.component_instance:render()
+    else
+        -- Functional component
+        return instance.element.type(props)
+    end
 end
 
 local reconcile -- forward
 
+-- Reconciles children of a widget instance
 local function reconcile_children(instance, element)
-    --assert(is_widget_instance(instance))
-    --assert(is_vdom_element(element))
+    assert(is_widget_instance(instance))
+    assert(is_vdom_element(element))
 
     local widget = instance.widget
     local child_instances = instance.child_instances
@@ -199,7 +226,10 @@ local function reconcile_children(instance, element)
     return new_child_instances
 end
 
+-- Cleans up references to prevent cycles (this might be better resolved with weak references)
 local function cleanup(instance)
+    assert(is_instance(instance))
+
     instance.widget = nil
 
     if instance.child_instance then
@@ -214,9 +244,9 @@ local function cleanup(instance)
 end
 
 reconcile = function (parent_widget, instance, element)
-    --assert(parent_widget ~= nil)
-    --assert(instance == nil or is_instance(instance))
-    --assert(element == nil or is_vdom_element(element))
+    assert(parent_widget ~= nil)
+    assert(instance == nil or is_instance(instance))
+    assert(element == nil or is_vdom_element(element))
 
     if instance == nil then
         -- Create instance
@@ -254,22 +284,24 @@ reconcile = function (parent_widget, instance, element)
     else
         -- Update composite instance
 
-        instance.component_instance.props = element.props
+        local child_element = update_component(instance, element.props)
 
-        local child_element = instance.component_instance:render()
-        local old_child_instance = instance.child_instance
-        local child_instance = reconcile(parent_widget, old_child_instance, child_element)
+        if child_element ~= instance.child_element then
+            local old_child_instance = instance.child_instance
+            local child_instance = reconcile(parent_widget, old_child_instance, child_element)
 
-        instance.widget = child_instance.widget
-        instance.child_instance = child_instance
-        instance.element = element
+            instance.widget = child_instance.widget
+            instance.child_element = child_element
+            instance.child_instance = child_instance
+            instance.element = element
+        end
 
         return instance
     end
 end
 
-local function render(element, container)
-    --assert(is_vdom_element(element))
+local function mount(element, container)
+    assert(is_vdom_element(element))
 
     return reconcile(container, nil, element)
 end
@@ -281,7 +313,7 @@ end
 
 function component_base:set_state(partial_state)
     trace_push('vdom.lua: component_base.set_state')
-    --assert(type(partial_state) == 'table')
+    assert(type(partial_state) == 'table')
 
     local new_state = {}
     assign(new_state, self.state)
@@ -304,5 +336,5 @@ end
 return {
     component = component,
     create_element = create_element,
-    render = render
+    mount = mount
 }

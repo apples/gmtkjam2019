@@ -93,8 +93,8 @@ public:
             sushi_table.new_usertype<sushi::static_mesh>("static_mesh");
         }
 
-        lua["trace_push"] = [](const std::string& name){ tracing::push(name).discard(); };
-        lua["trace_pop"] = [](const std::string& name){ tracing::pop(name); };
+        lua["trace_push"] = +[](const std::string& name){ tracing::push(name).discard(); };
+        lua["trace_pop"] = +[](const std::string& name){ tracing::pop(name); };
 
         display_width = config["display"]["width"];
         display_height = config["display"]["height"];
