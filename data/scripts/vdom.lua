@@ -300,10 +300,12 @@ reconcile = function (parent_widget, instance, element)
     end
 end
 
-local function mount(element, container)
+local function render(element, container, instance)
     assert(is_vdom_element(element))
+    assert(container ~= nil)
+    assert(instance == nil or is_instance(instance))
 
-    return reconcile(container, nil, element)
+    return reconcile(container, instance, element)
 end
 
 function component_base:constructor(props)
@@ -336,5 +338,5 @@ end
 return {
     component = component,
     create_element = create_element,
-    mount = mount
+    render = render
 }
